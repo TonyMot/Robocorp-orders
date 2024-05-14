@@ -1,0 +1,188 @@
+from robocorp.tasks import task
+from RPA.HTTP import HTTP
+from RPA.Excel.Files import Files
+from RPA.PDF import PDF
+from RPA.Tables import Tables
+from RPA.Browser.Selenium import Selenium
+from selenium.webdriver.support.ui import Select
+import time
+
+import shutil
+from pathlib import Path
+
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+
+
+
+@task
+
+def order_robots_from_RobotSpareBin():
+    """
+    Orders robots from RobotSpareBin Industries Inc.
+    Saves the order HTML receipt as a PDF file.
+    Saves the Screenshot of the ordered robot.
+    Embeds the Screenshot of the robot to the PDF receipt.
+    Creates ZIP archive of the receipts and the images.
+
+#     """
+    browser = Selenium()
+
+    download_excel_file()
+    open_robot_order_website(browser)
+    time.sleep(10)
+    load_csv_to_table(browser)
+    close_browser(browser)
+
+def download_excel_file():
+    """Downloads excel file from the given URL"""
+    http = HTTP()
+    http.download(url="https://robotsparebinindustries.com/orders.csv", overwrite=True)
+
+def open_robot_order_website(browser):
+    browser.open_available_browser("https://robotsparebinindustries.com/#/robot-order", browser_selection="edge")
+
+
+def load_csv_to_table(browser):
+    """Read data from excel the CSV file into a table"""
+    table = Tables()
+    
+    orders = table.read_table_from_csv("orders.csv", columns=["Order number","Head", "Body", "Legs", "Address"])  
+          
+    for row in orders:
+        handle_dialogue(browser)
+        fill_and_submit_order_form(browser, row)
+
+def handle_dialogue(browser):
+     
+   #   dialogue_button = browser.find_element(locator='xpath:/html/body/div/div/div[2]/div/div/div/div/div/button[1]')
+   #   dialogue_button.click()
+     browser.click_element_when_clickable(locator="xpath:/html/body/div/div/div[2]/div/div/div/div/div/button[1]")
+
+def fill_and_submit_order_form(browser, row):
+
+    #Filling out the head field
+    #  head = browser.find_element(locator="id:head")
+    #  head.send_keys(row["Head"]) 
+    # browser.select_from_list_by_label("id=dropdownElementId", "Your Label")
+
+     dropdown_element = browser.find_element("id=head")
+     select = Select(dropdown_element)
+     select.select_by_value(row["Head"])
+
+    #  label = row["head"]
+    #  browser.select_from_list_by_label(locator="id:head", label])
+    # #  browser.select_from_list_by_label("id=head", row["Head"])
+
+
+
+    
+     if((row["Body"])) == "1":  
+          
+        body_button = browser.find_element(locator="id:id-body-1")
+        body_button.click()
+
+     if((row["Body"]) == "2"):
+        body_button = browser.find_element(locator="id:id-body-2")
+        body_button.click()
+
+     if((row["Body"]) == "3"):
+        body_button = browser.find_element(locator="id:id-body-3")
+        body_button.click()
+
+     if((row["Body"]) == "4"):
+        body_button = browser.find_element(locator="id:id-body-4")
+        body_button.click()
+
+     if((row["Body"]) == "5"):
+        body_button = browser.find_element(locator="id:id-body-5")
+        body_button.click()
+
+     if((row["Body"]) == "6"):
+        body_button = browser.find_element(locator="id:id-body-6")
+        body_button.click()
+
+    # filling out legs field 
+     legs_field = browser.find_element(locator="xpath:/html/body/div/div/div[1]/div/div[1]/form/div[3]/input")
+     legs_field.send_keys(str(row["Legs"]))
+    
+
+    # filling out a delivery address
+     
+     address_field = browser.find_element(locator="xpath:/html/body/div/div/div[1]/div/div[1]/form/div[4]/input")
+     address_field.send_keys(row["Address"])
+
+    
+    
+    # Clicking the order button
+        
+     browser.click_element_when_clickable(locator="id:order")
+
+     
+
+    
+     
+    #Clicking Order Another Robot Button 
+     is_visible = browser.is_element_visible(locator="id:order")
+
+    # Click order button again in case it has not disappeared
+     if is_visible:
+        
+        browser.click_element_when_clickable(locator="id:order")
+
+    # Take the receipt, screenshot, embed the two and archive the make another order
+
+     """Build paths to store PDFs and Pictures using current order number"""
+
+     pdf_path = "output/order." + row["Order number"] + ".pdf"
+     image_path = "output/order." + row["Order number"] + ".png"
+     complete_pdf_path = "output/pdf." + row["Order number"] + ".pdf"
+
+     store_receipt_as_pdf(browser, pdf_path) #row["Order number"])
+     time.sleep(10)
+     take_robot_picture(browser, image_path) #order_number)
+     add_screenshot_to_pdf(pdf_path, image_path,complete_pdf_path )
+     archive_receipts(complete_pdf_path)
+
+     browser.click_element_when_clickable(locator="xpath:/html/body/div/div/div[1]/div/div[1]/div/button")
+ 
+     
+
+def store_receipt_as_pdf(browser, pdf_path):
+    """Capture Order reciept"""   
+    time.sleep(10)  
+    order_receipt_html = browser.get_element_attribute("id=receipt", "innerHTML") 
+    # order_receipt_html = browser.get_element_attribute(locator="id:receipt", "innerHTML")
+
+    pdf = PDF()
+    pdf.html_to_pdf(order_receipt_html, pdf_path)
+
+def take_robot_picture(browser,image_path):
+    """Take a screenshot of the robot"""
+    time.sleep(10)
+    browser.screenshot("id=robot-preview-image",image_path)
+
+def add_screenshot_to_pdf(pdf_path, image_path,complete_pdf_path):
+    """Embed robot picture to receipt pdf"""
+    pdf = PDF()
+    list_of_files = [
+        pdf_path,  # Your existing PDF document
+        image_path  # Your screenshot image to be appended
+    ]
+    pdf.add_files_to_pdf(
+        files=list_of_files,
+        target_document=complete_pdf_path  # The output PDF document with the screenshot appended
+    )
+def archive_receipts(complete_pdf_path):
+    # Define the directory to be zipped and the output ZIP file name
+    directory_to_zip = Path(complete_pdf_path)
+    output_zip_file = Path("zipped_complete_pdf") / "archive_name.zip"
+    
+    # Create a ZIP archive from the specified directory
+    shutil.make_archive(output_zip_file.stem, 'zip', directory_to_zip.parent, directory_to_zip.name)
+    
+    print(f"Created ZIP archive: {output_zip_file}")
+
+     
+def close_browser(browser):
+    browser.close_browser()
